@@ -27,7 +27,7 @@ files = {
 
 # Define EU country codes (based on EU27_2020)
 eu = ",".join(f"'{cat}'" for cat in 
-              ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 
+              ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'EL', 'HR', 'HU', 'IE', 'IT', 
                'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK'])
 
 # Define NACE categories and aggregation (summing to totals)
@@ -36,7 +36,7 @@ nace = ",".join(f"'{cat}'" for cat in
         'C25', 'C26', 'C27', 'C28', 'C29', 'C30', 'C31_C32', 'C33', 'D', 'E36', 'E37-E39', 'F', 'G45', 'G46', 'G47', 
         'H49', 'H50', 'H51', 'H52', 'H53', 'I', 'J58', 'J59_J60', 'J61', 'J62_J63', 'K64', 'K65', 'K66', 'L', 'M69_M70', 
         'M71', 'M72', 'M73', 'M74_M75', 'N77', 'N78', 'N79', 'N80-N82', 'O', 'P', 'Q86', 'Q87_Q88', 'R90-R92', 'R93', 
-        'S94', 'S95', 'S96', 'T', 'HH_HEAT', 'HH_OTH', 'HH_TRA'])
+        'S94', 'S95', 'S96', 'T', 'HH'])
 
 # Define mapping between CPA and NACE codes (to connect TRADE files with other files)
 cpa_to_nace = {
@@ -58,7 +58,7 @@ cpa_to_nace = {
     '86': 'Q86',       '87': 'Q87_Q88',   '88': 'Q87_Q88',   '90': 'R90-R92',   '91': 'R90-R92',
     '92': 'R90-R92',   '93': 'R93',       '94': 'S94',       '95': 'S95',       '96': 'S96',
     '97': 'T',         '98': 'T',         '99': 'T',         
-    'dummy0': 'U', 'dummy1': 'HH_HEAT' ,'dummy2':'HH_OTH', 'dummy3':'HH_TRA'
+    'dummy0': 'U', 'dummy1': 'HH'
 }
 
 # Used for changing incosistent country names thorughout different original input files
@@ -81,7 +81,7 @@ data_quality = {"C10-12": "C10-C12", "C13-15": "C13-C15", "C31_32": "C31_C32", "
 # Define summable greenhouse gas categories (GHG) from original Eurostat data:
     # CO2, N2O in CO2 equivalent, CH4 in CO2 equivalent, HFC in CO2 equivalent, PFC in CO2 equivalent, 
     # SF6 in CO2 equivalent, NF3 in CO2 equivalent)
-greenhouse_gasses = ["CO2", "N2O_CO2E", "CH4_CO2E", "HFC_CO2E", "PFC_CO2E", "NF3_SF6_CO2E", "GHG"]
+greenhouse_gasses = ["CO2", "N2O_CO2E", "CH4_CO2E", "HFC_CO2E", "PFC_CO2E", "NF3_SF6_CO2E"]
 
 # Define columns names
 columns = ["GEO_code", "GEO_name", "CAT_code", "CAT_name", "CAT_other"]
@@ -149,7 +149,7 @@ df.loc[df["CAT_code"].isin(data_quality.keys()), "CAT_code"]=df["CAT_code"].map(
 # Streamlining category naming
 df["CAT_code"] = df["CAT_code"].replace({"D35": "D", "L68": "L", "O84": "O", "P85": "P"})       
 # Keeping summable categories only
-df = df[~df['CAT'].isin(greenhouse_gasses)]                                                     
+df.loc[df["Indicator"] == "ENV_FOOTPRINT"] = df[df['CAT'].isin(greenhouse_gasses)]                                                     
 
 # Create mapping tables
 df_cat_mapping = df[["CAT_code", "CAT_name", "CAT"]].drop_duplicates()
@@ -163,10 +163,12 @@ df = df[df["Value"] != ":"]
 # series initially loaded as string due to missing values
 df["Value"] = pd.to_numeric(df["Value"], errors="coerce")           
 # express in millions
-df.loc[df["Indicator"] == "TRADE_EXPORT", "Value"] /= 1000000       
-df.loc[df["Indicator"] == "TRADE_IMPORT", "Value"] /= 1000000       
+df.loc[df["Indicator"] == "TRADE_EXPORT", "Value"] /= 1000000
+df.loc[df["Indicator"] == "TRADE_IMPORT", "Value"] /= 1000000
+df.loc[df["Indicator"] == "ENV_EMISSIONS", "Value"] /= 1000      
+df.loc[df["Indicator"] == "ENV_FOOTPRINT", "Value"] /= 1000
 
-# Exclude countries with incomplete data - identified in SQL check later on 
+# Exclude countries with incomplete data - identified by the SQL check in subsequent steps
 df = df[(df['GEO_code'] != "IE") & (df['GEO_code'] != "LU") & (df['GEO_code'] != "MT")]
 
 # Writing to SQL database
@@ -402,7 +404,3 @@ with pd.ExcelWriter(path + "OUT_data.xlsx") as writer:
     cpa_nace_mapping.to_excel(writer, sheet_name="Mapping_CPA_NACE", index=False)
     checks.to_excel(writer, sheet_name="Checks", index=False)
 analysis_df.to_excel(path + "OUT_analysis.xlsx", index=False)
-
-
-
-
